@@ -30,7 +30,7 @@ public final class SQLiteDirectCursorDriver implements SQLiteCursorDriver {
     private final String mEditTable; 
     private final String mSql;
     private final CancellationSignal mCancellationSignal;
-    private SQLiteQuery mQuery;
+    private SQLiteProgram mQuery;
 
     public SQLiteDirectCursorDriver(SQLiteDatabase db, String sql, String editTable,
             CancellationSignal cancellationSignal) {
@@ -41,11 +41,17 @@ public final class SQLiteDirectCursorDriver implements SQLiteCursorDriver {
     }
 
     public Cursor query(SQLiteDatabase.CursorFactory factory, Object[] selectionArgs) {
-        SQLiteQuery query = new SQLiteQuery(mDatabase, mSql, selectionArgs, mCancellationSignal);
+        SQLiteProgram query;
+        if (factory == null) {
+            query = new SQLiteQuery(mDatabase, mSql, selectionArgs, mCancellationSignal);
+        } else {
+            query = factory.newQuery(mDatabase, mSql, selectionArgs, mCancellationSignal);
+        }
+
         final Cursor cursor;
         try {
             if (factory == null) {
-                cursor = new SQLiteCursor(this, mEditTable, query);
+                cursor = new SQLiteCursor(this, mEditTable, (SQLiteQuery) query);
             } else {
                 cursor = factory.newCursor(mDatabase, this, mEditTable, query);
             }

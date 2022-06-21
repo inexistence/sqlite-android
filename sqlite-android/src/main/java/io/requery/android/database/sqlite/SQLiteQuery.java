@@ -20,6 +20,8 @@ package io.requery.android.database.sqlite;
 import android.database.sqlite.SQLiteDatabaseCorruptException;
 import android.database.sqlite.SQLiteException;
 import android.util.Log;
+
+import androidx.annotation.VisibleForTesting;
 import androidx.core.os.CancellationSignal;
 import androidx.core.os.OperationCanceledException;
 import io.requery.android.database.CursorWindow;
@@ -38,6 +40,16 @@ public final class SQLiteQuery extends SQLiteProgram {
 
     SQLiteQuery(SQLiteDatabase db, String query, Object[] bindArgs,
                 CancellationSignal cancellationSignal) {
+        super(db, query, bindArgs, cancellationSignal);
+        mCancellationSignal = cancellationSignal;
+    }
+
+    /**
+     * this is public for test
+     */
+    @VisibleForTesting
+    public SQLiteQuery(SQLiteDatabase db, String query, Object[] bindArgs,
+                       CancellationSignal cancellationSignal, Void forTest) {
         super(db, query, bindArgs, cancellationSignal);
         mCancellationSignal = cancellationSignal;
     }

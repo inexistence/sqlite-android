@@ -17,6 +17,10 @@
 
 package io.requery.android.database.sqlite;
 
+import android.database.sqlite.SQLiteDatabaseCorruptException;
+import android.database.sqlite.SQLiteException;
+import android.database.sqlite.SQLiteFullException;
+
 import androidx.core.os.CancellationSignal;
 import androidx.sqlite.db.SupportSQLiteProgram;
 
@@ -38,6 +42,9 @@ public abstract class SQLiteProgram extends SQLiteClosable implements SupportSQL
     private final String[] mColumnNames;
     private final int mNumParameters;
     private final Object[] mBindArgs;
+
+    protected SQLiteConnection.PreparedStatement mPreparedStatement;
+    private SQLiteSession mBoundSession;
 
     SQLiteProgram(SQLiteDatabase db, String sql, Object[] bindArgs,
             CancellationSignal cancellationSignalForPrepare) {
@@ -106,6 +113,27 @@ public abstract class SQLiteProgram extends SQLiteClosable implements SupportSQL
     /** @hide */
     protected final int getConnectionFlags() {
         return mDatabase.getThreadDefaultConnectionFlags(mReadOnly);
+    }
+
+    /** @hide */
+    protected final void checkCorruption(SQLiteException e) {
+        boolean isCorruption = false;
+        if (e instanceof SQLiteDatabaseCorruptException) {
+            isCorruption = true;
+        } else if (e instanceof SQLiteFullException) {
+            // When SQLite executing OP_Column opcode during SELECT or UPDATE statements,
+            // it may return SQLITE_FULL when trying to access unreachable pages.
+            // It's considered corruption on this scenario. We cannot distinguish such
+            // situation here, so we treat all SQLiteFullException thrown by a SELECT
+            // statement a signal on corruption.
+            if (mReadOnly) {
+                isCorruption = true;
+            }
+        }
+
+        if (isCorruption) {
+            mDatabase.onCorruption();
+        }
     }
 
     /** @hide */
@@ -242,5 +270,39 @@ public abstract class SQLiteProgram extends SQLiteClosable implements SupportSQL
                     + "The statement has " + mNumParameters + " parameters.");
         }
         mBindArgs[index - 1] = value;
+    }
+
+
+    protected synchronized boolean acquirePreparedStatement() {
+        SQLiteSession session = mDatabase.getThreadSession();
+        if (session == mBoundSession)
+            return false;
+
+        if (mBoundSession != null) {
+            throw new IllegalStateException("SQLiteProgram has bound to another thread.");
+        }
+
+        mPreparedStatement = session.acquirePreparedStatement(mSql,
+                mDatabase.getThreadDefaultConnectionFlags(mReadOnly));
+        mPreparedStatement.bindArguments(mBindArgs);
+        mBoundSession = session;
+        return true;
+    }
+
+    protected synchronized void releasePreparedStatement() {
+        if (mBoundSession == null && mPreparedStatement == null)
+            return;
+
+        if (mBoundSession == null || mPreparedStatement == null) {
+            throw new IllegalStateException("Internal state error.");
+        }
+
+        if (mBoundSession != mDatabase.getThreadSession()) {
+            throw new IllegalStateException("SQLiteProgram has bound to another thread.");
+        }
+
+        mBoundSession.releasePreparedStatement(mPreparedStatement);
+        mPreparedStatement = null;
+        mBoundSession = null;
     }
 }

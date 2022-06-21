@@ -15,7 +15,7 @@
  */
 // modified from original source see README at the top level of this project
 /*
-** Modified to support SQLite extensions by the SQLite developers: 
+** Modified to support SQLite extensions by the SQLite developers:
 ** sqlite-dev@sqlite.org.
 */
 
@@ -37,6 +37,7 @@ import androidx.core.os.CancellationSignal;
 import androidx.core.os.OperationCanceledException;
 import io.requery.android.database.CursorWindow;
 
+import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -152,6 +153,10 @@ public final class SQLiteConnection implements CancellationSignal.OnCancelListen
             int index, byte[] value);
     private static native void nativeResetStatementAndClearBindings(
             long connectionPtr, long statementPtr);
+
+    private static native void nativeResetStatement(
+            long connectionPtr, long statementPtr,
+            boolean clearBinding);
     private static native void nativeExecute(long connectionPtr, long statementPtr);
     private static native long nativeExecuteForLong(long connectionPtr, long statementPtr);
     private static native String nativeExecuteForString(long connectionPtr, long statementPtr);
@@ -921,7 +926,7 @@ public final class SQLiteConnection implements CancellationSignal.OnCancelListen
         }
     }
 
-    private PreparedStatement acquirePreparedStatement(String sql) {
+    PreparedStatement acquirePreparedStatement(String sql) {
         PreparedStatement statement = mPreparedStatementCache.get(sql);
         boolean skipCache = false;
         if (statement != null) {
@@ -956,7 +961,7 @@ public final class SQLiteConnection implements CancellationSignal.OnCancelListen
         return statement;
     }
 
-    private void releasePreparedStatement(PreparedStatement statement) {
+    void releasePreparedStatement(PreparedStatement statement) {
         statement.mInUse = false;
         if (statement.mInCache) {
             try {
@@ -1268,7 +1273,7 @@ public final class SQLiteConnection implements CancellationSignal.OnCancelListen
             statement.mPoolNext = null;
             statement.mInCache = false;
         } else {
-            statement = new PreparedStatement();
+            statement = new PreparedStatement(this);
         }
         statement.mSql = sql;
         statement.mStatementPtr = statementPtr;
@@ -1298,7 +1303,10 @@ public final class SQLiteConnection implements CancellationSignal.OnCancelListen
      * resource disposal because all native statement objects must be freed before
      * the native database object can be closed.  So no finalizers here.
      */
-    private static final class PreparedStatement {
+    static final class PreparedStatement {
+        // Reference to owner.
+        private WeakReference<SQLiteConnection> mConnection;
+
         // Next item in pool.
         public PreparedStatement mPoolNext;
 
@@ -1326,6 +1334,66 @@ public final class SQLiteConnection implements CancellationSignal.OnCancelListen
         // possible for SQLite calls to be re-entrant.  Consequently we need to prevent
         // in use statements from being finalized until they are no longer in use.
         public boolean mInUse;
+
+        private int mOperationCookie = -1;
+
+        PreparedStatement(SQLiteConnection connection) {
+            mConnection = new WeakReference<>(connection);
+        }
+
+        public void bindArguments(Object[] bindArgs) {
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            connection.bindArguments(this, bindArgs);
+        }
+
+        public void beginOperation(String kind, Object[] bindArgs) {
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            mOperationCookie = connection.mRecentOperations.beginOperation(kind, mSql, bindArgs);
+        }
+
+        public void failOperation(Exception ex) {
+            if (mOperationCookie == -1) return;
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            connection.mRecentOperations.failOperation(mOperationCookie, ex);
+        }
+
+        public void endOperation(String detail) {
+            if (mOperationCookie == -1) return;
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            if (connection.mRecentOperations.endOperationDeferLog(mOperationCookie)) {
+                connection.mRecentOperations.logOperation(mOperationCookie, detail);
+            }
+            mOperationCookie = -1;
+        }
+
+        public void attachCancellationSignal(CancellationSignal cancellationSignal) {
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            connection.attachCancellationSignal(cancellationSignal);
+        }
+
+        public void detachCancellationSignal(CancellationSignal cancellationSignal) {
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            connection.detachCancellationSignal(cancellationSignal);
+        }
+
+        public void reset(boolean clearBindings) {
+            SQLiteConnection connection = mConnection.get();
+            if (connection == null) return;
+
+            nativeResetStatement(connection.mConnectionPtr, mStatementPtr, clearBindings);
+        }
     }
 
     private final class PreparedStatementCache

@@ -1,2 +1,3 @@
 rootProject.name = 'requery-sqlite'
 include ':sqlite-android'
+include ':demo'

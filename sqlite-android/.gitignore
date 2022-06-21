@@ -5,3 +5,5 @@
 /src/main/jni/sqlite.zip
 /src/main/obj
 .externalNativeBuild/
+/.cxx
+/.cxx/**

@@ -30,6 +30,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import androidx.core.os.CancellationSignal;
 import androidx.test.core.app.ApplicationProvider;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.LargeTest;
@@ -37,6 +38,7 @@ import androidx.test.filters.MediumTest;
 import io.requery.android.database.sqlite.SQLiteCursor;
 import io.requery.android.database.sqlite.SQLiteCursorDriver;
 import io.requery.android.database.sqlite.SQLiteDatabase;
+import io.requery.android.database.sqlite.SQLiteProgram;
 import io.requery.android.database.sqlite.SQLiteQuery;
 
 import java.io.File;
@@ -442,10 +444,15 @@ public class DatabaseCursorTest {
         populateDefaultTable();
 
         SQLiteDatabase.CursorFactory factory = new SQLiteDatabase.CursorFactory() {
+            @Override
+            public SQLiteProgram newQuery(SQLiteDatabase db, String sql, Object[] selectionArgs, CancellationSignal cancellationSignal) {
+                return new SQLiteQuery(db, sql, selectionArgs, cancellationSignal, null);
+            }
+
             public Cursor newCursor(
-                SQLiteDatabase db, SQLiteCursorDriver masterQuery, String editTable,
-                SQLiteQuery query) {
-                return new SQLiteCursor(masterQuery, editTable, query) {
+                    SQLiteDatabase db, SQLiteCursorDriver masterQuery, String editTable,
+                    SQLiteProgram query) {
+                return new SQLiteCursor(masterQuery, editTable, (SQLiteQuery) query) {
                     @Override
                     public boolean requery() {
                         setSelectionArguments(new String[]{"2"});

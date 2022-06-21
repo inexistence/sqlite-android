@@ -519,6 +519,25 @@ static void nativeBindBlob(JNIEnv* env, jclass clazz, jlong connectionPtr,
     }
 }
 
+    static void nativeResetStatement(JNIEnv *env,
+                                     jclass clazz,
+                                     jlong connectionPtr,
+                                     jlong statementPtr,
+                                     jboolean clearBindings)
+    {
+        sqlite3_stmt *statement = (sqlite3_stmt *) (intptr_t) statementPtr;
+
+        int err = sqlite3_reset(statement);
+        if (err == SQLITE_OK && clearBindings) {
+            err = sqlite3_clear_bindings(statement);
+        }
+        if (err != SQLITE_OK) {
+            SQLiteConnection *connection =
+                    (SQLiteConnection *) (intptr_t) connectionPtr;
+            throw_sqlite3_exception(env, connection->db, nullptr);
+        }
+    }
+
 static void nativeResetStatementAndClearBindings(JNIEnv* env, jclass clazz, jlong connectionPtr,
         jlong statementPtr) {
     SQLiteConnection* connection = reinterpret_cast<SQLiteConnection*>(connectionPtr);
@@ -974,6 +993,7 @@ static JNINativeMethod sMethods[] =
             (void*)nativeHasCodec },
     { "nativeLoadExtension", "(JLjava/lang/String;Ljava/lang/String;)V",
             (void*)nativeLoadExtension },
+    {"nativeResetStatement", "(JJZ)V", (void *) nativeResetStatement},
 };
 
 int register_android_database_SQLiteConnection(JNIEnv *env)
@@ -1012,6 +1032,7 @@ extern int register_android_database_SQLiteGlobal(JNIEnv *env);
 extern int register_android_database_SQLiteDebug(JNIEnv *env);
 extern int register_android_database_SQLiteFunction(JNIEnv *env);
 extern int register_android_database_CursorWindow(JNIEnv *env);
+extern int register_android_database_SQLiteDirectQuery(JNIEnv *env);
 
 } // namespace android
 
@@ -1026,6 +1047,7 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
   android::register_android_database_SQLiteGlobal(env);
   android::register_android_database_CursorWindow(env);
   android::register_android_database_SQLiteFunction(env);
+  android::register_android_database_SQLiteDirectQuery(env);
 
   return JNI_VERSION_1_4;
 }

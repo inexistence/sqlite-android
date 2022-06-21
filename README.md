@@ -1,7 +1,37 @@
 # Android SQLite support library
 
-[![Build Status](https://travis-ci.org/requery/sqlite-android.svg?branch=master)](https://travis-ci.org/requery/sqlite-android)
-[![Download](https://jitpack.io/v/requery/sqlite-android.svg)](https://jitpack.io/#requery/sqlite-android)
+### 我的说明
+1. android 内部实现的 sqlite 不同版本间存在性能差异
+2. sqlite 官方实现的 sqlite android 比 android 内部的性能更优，
+
+### 我的修改
+1. 编译选项（sqlite_flags）由`-O3`修改为`-Os`，减小包体。（暂未发现性能上的差异）
+2. 新增 SQLiteDirectCursor，取消 SQLiteCursor 中 WindowCursor 的代理，当数据大小超过2M，向前查询速度更快。相对的，其向后查询性能很差。
+     * 原因：WindowCursor 存在缓存和内存限制（2M），每次到达内存上限会重新触发一次fillWindow内容填充，且该行为需从头开始遍历。所以当读取的数据超过2M，性能将变差，内容越大性能越差
+     * 修改：感觉 WindowCursor 的做法没啥意义。去除 WindowCursor 代理，直接操作 sqlite native 进行位移和读取数据。不同点在于没有了缓存操作和内存大小限制。
+     * 缺点：往前查询（moveToNext 或新 position 比旧的大）的情况下会比 CursorWindow 快。但是由于 sqlite 只提供了向前步进的方法，如果是向后查询每次都需要从头遍历到目标位置，这时由于没有缓存性能较 WindowCursor 会差很多
+
+### 性能对比
+
+设备为一加5T（Android 10），代码见demo
+
+| 类型                               | 行为                | 耗时（ms）   |
+| ---------------------------------- | ------------------- | ------------ |
+| sqlite官方                         | 插入50000条相同数据 | 2787         |
+| android官方                        | 插入50000条相同数据 | 3538         |
+| ---分割线---                       | ---分割线---        | ---分割线--- |
+| sqlite官方                         | 遍历向前查询全部    | 1928         |
+| 基于sqlite官方的SQLiteDirectCursor | 遍历向前查询全部    | 715          |
+| android官方                        | 遍历向前查询全部    | 2498         |
+| ---分割线---                       | ---分割线---        | ---分割线--- |
+| sqlite官方                         | 遍历向后查询全部    | 3471         |
+| 基于sqlite官方的SQLiteDirectCursor | 遍历向后查询全部    | ANR          |
+| android官方                        | 遍历向后查询全部    | 3943         |
+
+
+
+
+### 下面是原官方文档
 
 This is an Android specific distribution of the latest versions of SQLite. It contains the latest
 SQLite version and the Android specific database APIs derived from AOSP packaged as an AAR
@@ -152,13 +182,13 @@ License
 
     Copyright (C) 2017-2021 requery.io
     Copyright (C) 2005-2012 The Android Open Source Project
-
+    
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
-
+    
     http://www.apache.org/licenses/LICENSE-2.0
-
+    
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.

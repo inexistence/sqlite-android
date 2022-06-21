@@ -31,7 +31,7 @@ sqlite_flags := \
     -DSQLITE_MAX_EXPR_DEPTH=0 \
     -DSQLITE_USE_ALLOCA \
     -DSQLITE_ENABLE_BATCH_ATOMIC_WRITE \
-    -O3
+    -Os
 
 LOCAL_CFLAGS += $(sqlite_flags)
 LOCAL_CFLAGS += -Wno-unused-parameter -Wno-int-to-pointer-cast
@@ -52,6 +52,7 @@ LOCAL_SRC_FILES:= \
 	android_database_SQLiteGlobal.cpp \
 	android_database_SQLiteDebug.cpp \
 	android_database_CursorWindow.cpp \
+	android_database_SQLiteDirectQuery.cpp \
 	CursorWindow.cpp \
 	JNIHelp.cpp \
 	JNIString.cpp

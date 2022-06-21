@@ -922,6 +922,23 @@ public final class SQLiteSession {
         }
     }
 
+    /*package*/ SQLiteConnection.PreparedStatement acquirePreparedStatement(String sql,
+                                                                            int connectionFlags) {
+        // When we're holding a prepared statement, we're also holding its connection.
+        // This prevents database connections from being used by two or more threads.
+        acquireConnection(sql, connectionFlags, null);
+
+        return mConnection.acquirePreparedStatement(sql);
+    }
+
+    /*package*/ void releasePreparedStatement(SQLiteConnection.PreparedStatement statement) {
+        // acquirePreparedStatement keeps connection as well, so we are responsible to release it.
+        if (mConnection != null) {
+            mConnection.releasePreparedStatement(statement);
+            releaseConnection();
+        }
+    }
+
     private void throwIfNoTransaction() {
         if (mTransactionStack == null) {
             throw new IllegalStateException("Cannot perform this operation because "
