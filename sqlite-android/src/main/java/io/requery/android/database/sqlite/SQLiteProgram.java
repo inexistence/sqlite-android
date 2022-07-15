@@ -260,6 +260,7 @@ public abstract class SQLiteProgram extends SQLiteClosable implements SupportSQL
 
     @Override
     protected void onAllReferencesReleased() {
+        releasePreparedStatement();
         clearBindings();
     }
 

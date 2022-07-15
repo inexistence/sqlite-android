@@ -29,7 +29,8 @@
 | android官方                        | 遍历向后查询全部    | 3943         |
 
 
-
+### 其他建议
+如果要count，可以使用DatabaseUtils.queryNumEntries，速度有些许提升
 
 ### 下面是原官方文档
 
